@@ -5,7 +5,66 @@
 # =========================
 class CachingMechanism(object):
     """A Python emulator of a caching mechanism for movies (Video cache++)."""
+    class kd_tree (object):
+            class Node:
+                def __init__ (self, name, x, y, axis, left = None, right = None):
+                    self.x = x
+                    self.y = y
+                    self.axis = axis
+                    self.left = left
+                    self.right = right
+                    self.name = name
+            
+            def __init__ (self, cache_list:list[tuple[str, float, float]]):
+                depth = len(cache_list)
+                self.tree = self.build_tree(cache_list, 0)
+            
+            def build_tree(self, nodes, depth):
+                axis = depth%2
 
+                # +1 because we're using the full cache tuple
+                sorted_nodes = sorted(nodes, key=lambda x:x[axis+1])
+                root = sorted_nodes[len(sorted_nodes)//2]
+                
+                root_node = self.Node(
+                    name = root[0],
+                    x = root[1], 
+                    y = root[2],
+                    axis = axis,
+                    left = self.build_tree(sorted_nodes[:len(sorted_nodes)//2], depth+1),
+                    right = self.build_tree(sorted_nodes[len(sorted_nodes)//2 +1:], depth+1),
+                )
+
+                return root_node
+            
+            def get_nearest(self, X,Y):
+                nearest = ('', float('inf'), float('inf'))
+
+
+                
+                return nearest[0]
+    
+    class Cache(object):
+        class Node(object):
+            def __init__(self, movie):
+                self.next = None
+                self.prev = None
+                self.movie = movie
+        def __init__(self,x,y,movies, name):
+            self.x = x
+            self.y = y
+            self.name = name
+            self.movies = movies
+            self.head = self.Node(None)
+            self.tail = self.Node(None)
+            self.size = 0
+
+            # lasdkfjalkdsf
+        def put(movie, time):
+            return None
+        def evict():
+            return None
+    
     def __init__(self, movie_list, cache_list, movies_per_cache, ttl: int):
         """
         Parameters
@@ -22,34 +81,14 @@ class CachingMechanism(object):
         ## TODO: Implement it
 
         self.movie_list = movie_list
-        self.cache_list = cache_list
+        self.caches = {}
+        for cache in cache_list:
+            self.caches[cache[0]] = (self.Cache(x=cache[1], y = cache[2], name = cache[0], movies = {}))
         self.capacity = movies_per_cache
         self.ttl = ttl
 
         self.cache_tree = self.kd_tree(cache_list)
-
-        class kd_tree (object):
-            def __init__ (self, cache_list:list[tuple[str, float, float]]):
-                depth = len(cache_list)
-                self.tree = self.build_tree(cache_list, 0)
-            
-            class Node:
-                def __init__ (self, name, X, Y, axis, left = None, right = None):
-                    self.x = X
-                    self.y = Y
-                    self.axis = axis
-                    self.left = left
-                    self.right = right
-                    self.name = name
-            
-            def build_tree(self, nodes, depth):
-                if depth%2 == 0: 
-                    
-            
-            def get_nearest(self, X,Y):
-                nearest = None
-                return nearest
-    
+        
     def find_nearest_cache(self, x: float, y: float) -> str:
         """
         Return nearest cache location name using Euclidean distance.
@@ -74,4 +113,12 @@ class CachingMechanism(object):
         Otherwise return (False, None) and insert/refresh in nearest cache with expiration t+TTL.
         """
         ## TODO: Implement it
-        return (False, None)
+        nearest = self.find_nearest_cache(user_x, user_y)
+        nearest_movies = self.caches[nearest].movies
+
+        if movie_title in nearest_movies and t<nearest_movies[movie_title]+self.ttl:
+            self.update_cache_state(nearest,movie_title,t)
+            return (True, nearest)
+        else:
+            self.update_cache_state(nearest,movie_title,t)
+            return (False, None)
