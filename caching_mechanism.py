@@ -3,6 +3,7 @@
 # =========================
 # Main mechanism
 # =========================
+import math
 class CachingMechanism(object):
     """A Python emulator of a caching mechanism for movies (Video cache++)."""
     class kd_tree (object):
@@ -20,6 +21,8 @@ class CachingMechanism(object):
                 self.tree = self.build_tree(cache_list, 0)
             
             def build_tree(self, nodes, depth):
+                if not nodes: 
+                    return None
                 axis = depth%2
 
                 # +1 because we're using the full cache tuple
@@ -38,33 +41,77 @@ class CachingMechanism(object):
                 return root_node
             
             def get_nearest(self, X,Y):
-                nearest = ('', float('inf'), float('inf'))
 
+                def search(node):
+                    if not node:
+                        return
+                    # dist = (math.dist((X,Y), (node.x, node.y)))**2
+                    
+                    nodes = [node]
+                    
+                    node_left =  search(node.left)
+                    node_right = search(node.right)
 
-                
-                return nearest[0]
+                    if node_left:
+                        nodes.append(node_left)
+                    if node_right:
+                        nodes.append(node_right)
+                    
+                    dists = sorted(nodes, key = lambda n: (math.dist((X,Y), (n.x, n.y))**2, n.name))
+                    return dists[0]
+
+                nearest = search(self.tree)
+                return nearest.name
     
     class Cache(object):
+        # tail will be mru, head will be lru
         class Node(object):
-            def __init__(self, movie):
+            def __init__(self, movie, t):
                 self.next = None
                 self.prev = None
-                self.movie = movie
-        def __init__(self,x,y,movies, name):
+                self.name = movie
+                self.time = t
+        def __init__(self,x,y, name, capacity, ttl):
             self.x = x
             self.y = y
             self.name = name
-            self.movies = movies
-            self.head = self.Node(None)
-            self.tail = self.Node(None)
-            self.size = 0
+            self.movies = {}
+            self.head = self.Node(None, None)
+            self.tail = self.Node(None, None)
 
-            # lasdkfjalkdsf
-        def put(movie, time):
-            return None
-        def evict():
-            return None
-    
+            self.head.next = self.tail
+            self.tail.prev = self.head
+            self.size = 0
+            self.capacity = capacity
+
+            self.ttl = ttl
+
+        def put(self, movie, time):
+            if movie in self.movies:
+                self.movies[movie].time = time+self.ttl
+                self.movies[movie].prev.next = self.movies[movie].next
+                self.movies[movie].next.prev = self.movies[movie].prev
+            else:
+                self.movies[movie] = self.Node(movie, time+self.ttl)
+                self.size+=1
+            
+            self.movies[movie].prev = self.tail.prev
+            self.movies[movie].next = self.tail
+
+            self.tail.prev.next = self.movies[movie]
+            self.tail.prev = self.movies[movie]
+
+            self.evict()
+
+        def evict(self):
+            while(self.size>self.capacity):
+                lru = self.head.next
+                self.movies.pop(lru.name)
+
+                lru.next.prev = self.head
+                self.head.next = lru.next
+                self.size -= 1
+
     def __init__(self, movie_list, cache_list, movies_per_cache, ttl: int):
         """
         Parameters
@@ -83,10 +130,7 @@ class CachingMechanism(object):
         self.movie_list = movie_list
         self.caches = {}
         for cache in cache_list:
-            self.caches[cache[0]] = (self.Cache(x=cache[1], y = cache[2], name = cache[0], movies = {}))
-        self.capacity = movies_per_cache
-        self.ttl = ttl
-
+            self.caches[cache[0]] = (self.Cache(x=cache[1], y = cache[2], name = cache[0], capacity=movies_per_cache, ttl = ttl))
         self.cache_tree = self.kd_tree(cache_list)
         
     def find_nearest_cache(self, x: float, y: float) -> str:
@@ -103,7 +147,7 @@ class CachingMechanism(object):
         (This is called on misses/expired, per the prompt.)
         """
         ## TODO: Implement it
-        
+        self.caches[location_name].put(movie_title, t)
 
     def lookup(self, movie_title: str, user_x: float, user_y: float, t: int) -> Tuple[bool, Optional[str]]:
         """
