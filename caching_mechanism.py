@@ -20,16 +20,43 @@ class CachingMechanism(object):
             TTL for new inserts; expiration time is t + ttl.
         """
         ## TODO: Implement it
-        
 
+        self.movie_list = movie_list
+        self.cache_list = cache_list
+        self.capacity = movies_per_cache
+        self.ttl = ttl
+
+        self.cache_tree = self.kd_tree(cache_list)
+
+        class kd_tree (object):
+            def __init__ (self, cache_list:list[tuple[str, float, float]]):
+                depth = len(cache_list)
+                self.tree = self.build_tree(cache_list, 0)
+            
+            class Node:
+                def __init__ (self, name, X, Y, axis, left = None, right = None):
+                    self.x = X
+                    self.y = Y
+                    self.axis = axis
+                    self.left = left
+                    self.right = right
+                    self.name = name
+            
+            def build_tree(self, nodes, depth):
+                if depth%2 == 0: 
+                    
+            
+            def get_nearest(self, X,Y):
+                nearest = None
+                return nearest
+    
     def find_nearest_cache(self, x: float, y: float) -> str:
         """
         Return nearest cache location name using Euclidean distance.
         Tie-break: lexicographically smallest LocationName.
         """
         ## TODO: Implement it
-        location_name = None
-        return location_name
+        return self.cache_tree.get_nearest(x,y)
 
     def update_cache_state(self, location_name: str, movie_title: str, t: int) -> None:
         """
