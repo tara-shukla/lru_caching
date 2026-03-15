@@ -133,12 +133,14 @@ section("3. LRU EVICTION TIE-BREAKING")
 c = make([("loc", 0.0, 0.0)], k=2, ttl=1000)
 c.lookup("MovieA", 0.0, 0.0, t=1)  # insert A
 c.lookup("MovieB", 0.0, 0.0, t=2)  # insert B
-c.lookup("MovieC", 0.0, 0.0, t=3)  # full → A evicted
+c.lookup("MovieC", 0.0, 0.0, t=3)  # full → A evicted (LRU)
 
 run("Basic LRU: oldest-inserted item (A) evicted",
     c.lookup("MovieA", 0.0, 0.0, t=4), (False, None))
-run("Basic LRU: more-recently-inserted item (B) survives",
-    c.lookup("MovieB", 0.0, 0.0, t=5), (True, "loc"))
+# After re-inserting A at t=4: cache has B(last_used=2), C(last_used=3), A(last_used=4)
+# → B is now LRU, C survives
+run("Basic LRU: C (inserted t=3) survives over B (last_used=2)",
+    c.lookup("MovieC", 0.0, 0.0, t=5), (True, "loc"))
 
 # True LRU: a hit must update recency, not just track insertion order.
 # Insert A then B. Hit A → A becomes MRU, B becomes LRU. Insert C → B evicted.
@@ -164,8 +166,10 @@ c.lookup("MovieC", 0.0, 0.0, t=4)          # full → B evicted
 
 run("update_cache_state updates recency: A survives, B evicted",
     c.lookup("MovieB", 0.0, 0.0, t=5), (False, None))
-run("update_cache_state updates recency: A still present",
-    c.lookup("MovieA", 0.0, 0.0, t=6), (True, "loc"))
+# Looking up B (miss) re-inserts it at t=5 → cache has C(last_used=4), A(last_used=3), B(last_used=5)
+# A is now LRU — checking C survives instead
+run("update_cache_state updates recency: C (last touched t=4) still present",
+    c.lookup("MovieC", 0.0, 0.0, t=6), (True, "loc"))
 
 # Lex tie-break on eviction: two items share identical last-access time.
 # "Apple" and "Zorro" both accessed at t=3 → lex smaller "Apple" evicted first.
@@ -178,8 +182,10 @@ c.lookup("Newfilm", 0.0, 0.0, t=4)         # full → "Apple" evicted (lex small
 
 run("Lex tie-break: 'Apple' evicted (lex smaller than 'Zorro')",
     c.lookup("Apple", 0.0, 0.0, t=5), (False, None))
-run("Lex tie-break: 'Zorro' survives (lex larger)",
-    c.lookup("Zorro", 0.0, 0.0, t=6), (True, "loc"))
+# Looking up Apple (miss) re-inserts it at t=5 → cache has Newfilm(last_used=4), Apple(last_used=5)
+# Zorro was already evicted — checking Newfilm survives
+run("Lex tie-break: 'Newfilm' (inserted t=4) still present after Apple re-insert",
+    c.lookup("Newfilm", 0.0, 0.0, t=6), (True, "loc"))
 
 # Expired items are purged before LRU eviction.
 # Both items expire before the next insert → no valid item should be evicted.

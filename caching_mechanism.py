@@ -95,7 +95,18 @@ class CachingMechanism(object):
             self.expiry_heap = []
             self.lru_heap = []
             self.ttl = ttl
-
+        
+        def touch(self, movie, time):
+            node = self.movies[movie]
+            node.last_used = time
+            heapq.heappush(self.lru_heap, (time, movie))
+            node.prev.next = node.next
+            node.next.prev = node.prev
+            node.prev = self.tail.prev
+            node.next = self.tail
+            self.tail.prev.next = node
+            self.tail.prev = node
+    
         def put(self, movie, time):
             expiry = time + self.ttl
             if movie in self.movies:
@@ -205,9 +216,16 @@ class CachingMechanism(object):
 
         nearest_movies = self.caches[nearest].movies
 
-        if movie_title in nearest_movies and t<nearest_movies[movie_title].time:
-            self.update_cache_state(nearest,movie_title,t)
+        # if movie_title in nearest_movies and t<nearest_movies[movie_title].time:
+        #     self.update_cache_state(nearest,movie_title,t)
+        #     return (True, nearest)
+        # else:
+        #     self.update_cache_state(nearest,movie_title,t)
+        #     return (False, None)
+
+        if movie_title in nearest_movies and t < nearest_movies[movie_title].time:
+            self.caches[nearest].touch(movie_title, t)
             return (True, nearest)
         else:
-            self.update_cache_state(nearest,movie_title,t)
+            self.update_cache_state(nearest, movie_title, t)
             return (False, None)
