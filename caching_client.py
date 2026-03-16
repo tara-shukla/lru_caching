@@ -85,20 +85,29 @@ run("Case-sensitive lex tie-break: hit confirms insert went to 'Beta'",
 section("2. EXPIRATION & TTL BOUNDARY CONDITIONS")
 
 # Spec: valid at t iff t < expiration_time (strict less-than).
-# TTL=10, insert at t=1 → expiry=11.
+# TTL=10, insert at t=1 → expiry=11. Hit at t=10 → expiry refreshed to 20.
 c = make([("loc", 0.0, 0.0)], k=5, ttl=10)
 c.lookup("Inception", 0.0, 0.0, t=1)   # miss → inserts, expiry=11
-
-run("Valid at t=expiry-1  (10 < 11 → True)",
+run("Valid at t=expiry-1  (10 < 11 → True, expiry refreshed to 20)",
     c.lookup("Inception", 0.0, 0.0, t=10), (True, "loc"))
-run("Expired at t=expiry  (11 < 11 → False, strict boundary)",
+
+# Fresh cache: strict boundary test with no intermediate access.
+# Insert at t=1, expiry=11. No hits → expiry stays 11.
+c = make([("loc", 0.0, 0.0)], k=5, ttl=10)
+c.lookup("Inception", 0.0, 0.0, t=1)   # miss → inserts, expiry=11
+run("Expired at t=expiry with no intermediate access  (11 < 11 → False, strict boundary)",
     c.lookup("Inception", 0.0, 0.0, t=11), (False, None))
 
 # Expired item re-inserted with fresh expiry on the same miss call.
-# Re-insert at t=11 → new expiry=21.
-run("Re-inserted item valid before new expiry  (20 < 21 → True)",
+# Miss at t=11 → re-inserts, expiry=21. Hit at t=20 → expiry refreshed to 30.
+run("Re-inserted item valid before new expiry  (20 < 21 → True, expiry refreshed to 30)",
     c.lookup("Inception", 0.0, 0.0, t=20), (True, "loc"))
-run("Re-inserted item expires again at t=21  (21 < 21 → False)",
+
+# Fresh cache: re-insert boundary test with no intermediate access after re-insert.
+c = make([("loc", 0.0, 0.0)], k=5, ttl=10)
+c.lookup("Inception", 0.0, 0.0, t=1)   # miss → inserts, expiry=11
+c.lookup("Inception", 0.0, 0.0, t=11)  # miss → re-inserts, expiry=21
+run("Re-inserted item expires at new boundary  (21 < 21 → False)",
     c.lookup("Inception", 0.0, 0.0, t=21), (False, None))
 
 # TTL=0: expiry = t + 0 = t, so item is never valid (t < t is always False).
@@ -108,6 +117,7 @@ run("TTL=0: item expires immediately  (5 < 5 → False)",
     c.lookup("Ghost", 0.0, 0.0, t=5), (False, None))
 
 # t=0 edge: request at timestamp 0, TTL=1 → expiry=1.
+# Hit at t=0 refreshes expiry to 0+1=1 (same value), so t=1 still expires.
 c = make([("loc", 0.0, 0.0)], k=5, ttl=1)
 c.lookup("Dune", 0.0, 0.0, t=0)        # miss → inserts with expiry=1
 run("t=0 insert, hit at t=0  (0 < 1 → True)",
@@ -115,13 +125,19 @@ run("t=0 insert, hit at t=0  (0 < 1 → True)",
 run("t=0 insert, expired at t=1  (1 < 1 → False)",
     c.lookup("Dune", 0.0, 0.0, t=1), (False, None))
 
-# Access at t=expiry-1 does NOT extend the expiry.
-# Insert at t=1, expiry=11. Hit at t=10 — expiry must remain 11.
+# Hit DOES extend expiry (sliding window TTL).
+# Insert at t=1, expiry=11. Hit at t=10 → new expiry=20.
 c = make([("loc", 0.0, 0.0)], k=5, ttl=10)
 c.lookup("Dune", 0.0, 0.0, t=1)        # inserts, expiry=11
-c.lookup("Dune", 0.0, 0.0, t=10)       # hit — must NOT refresh expiry
-run("Hit does not extend expiry: still expires at original t=11",
-    c.lookup("Dune", 0.0, 0.0, t=11), (False, None))
+c.lookup("Dune", 0.0, 0.0, t=10)       # hit — refreshes expiry to 20
+run("Hit extends expiry: valid at t=11 (new expiry=20)",
+    c.lookup("Dune", 0.0, 0.0, t=11), (True, "loc"))
+# Fresh cache to test exact new boundary without further accesses.
+c = make([("loc", 0.0, 0.0)], k=5, ttl=10)
+c.lookup("Dune", 0.0, 0.0, t=1)        # inserts, expiry=11
+c.lookup("Dune", 0.0, 0.0, t=10)       # hit — refreshes expiry to 20
+run("Hit extends expiry: expires at new boundary t=20 (20 < 20 → False)",
+    c.lookup("Dune", 0.0, 0.0, t=20), (False, None))
 
 
 # ═══════════════════════════════════════════════════════════════
